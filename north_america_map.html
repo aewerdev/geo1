@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Номенклатура Северной Америки</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #2a3441;
+    --gold: #c9a84c;
+    --gold-light: #e8c97a;
+    --text: #e6ddd0;
+    --text-dim: #8b8070;
+    --correct: #4caf8a;
+    --wrong: #e05c5c;
+    --accent: #5b8fcc;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Crimson Pro', serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    height: 56px;
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    color: var(--gold);
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .mode-tabs {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+  }
+  .mode-tab {
+    padding: 6px 16px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    font-family: 'Crimson Pro', serif;
+    font-size: 15px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+  .mode-tab.active {
+    background: var(--gold);
+    color: #0d1117;
+    border-color: var(--gold);
+    font-weight: 600;
+  }
+  .mode-tab:hover:not(.active) { border-color: var(--gold); color: var(--gold); }
+
+  .category-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 20px;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .cat-btn {
+    padding: 3px 12px;
+    border-radius: 20px;
+    border: 1px solid;
+    font-family: 'Crimson Pro', serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    opacity: 0.5;
+  }
+  .cat-btn.on { opacity: 1; }
+
+  .main { display: flex; flex: 1; overflow: hidden; }
+  #map { flex: 1; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 280px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-inner { padding: 16px; overflow-y: auto; flex: 1; }
+  .sidebar h2 { font-family: 'Playfair Display', serif; font-size: 15px; color: var(--gold); margin-bottom: 12px; }
+
+  /* Nomenclature list */
+  .nom-group { margin-bottom: 14px; }
+  .nom-group-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+  }
+  .nom-item {
+    font-size: 14px;
+    padding: 3px 6px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.15s;
+    line-height: 1.4;
+  }
+  .nom-item:hover { background: rgba(201,168,76,0.12); color: var(--gold-light); }
+
+  /* GeoGuessr mode */
+  .quiz-panel { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .quiz-question {
+    background: rgba(201,168,76,0.08);
+    border: 1px solid var(--gold);
+    border-radius: 6px;
+    padding: 14px;
+    text-align: center;
+  }
+  .quiz-question .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 6px; }
+  .quiz-question .obj-name { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--gold-light); }
+  .quiz-question .obj-cat { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+
+  .quiz-instruction { font-size: 14px; color: var(--text-dim); text-align: center; line-height: 1.5; }
+
+  .quiz-result {
+    border-radius: 6px;
+    padding: 14px;
+    text-align: center;
+    display: none;
+  }
+  .quiz-result.correct { background: rgba(76,175,138,0.15); border: 1px solid var(--correct); }
+  .quiz-result.wrong { background: rgba(224,92,92,0.15); border: 1px solid var(--wrong); }
+  .quiz-result .res-icon { font-size: 28px; }
+  .quiz-result .res-text { font-family: 'Playfair Display', serif; font-size: 16px; margin-top: 4px; }
+  .quiz-result .res-dist { font-size: 13px; color: var(--text-dim); margin-top: 4px; }
+
+  .quiz-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    text-align: center;
+  }
+  .stat-box { background: rgba(255,255,255,0.04); border-radius: 6px; padding: 8px; }
+  .stat-val { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--gold); }
+  .stat-lbl { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  .btn-next {
+    background: var(--gold);
+    color: #0d1117;
+    border: none;
+    padding: 10px;
+    border-radius: 6px;
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: none;
+  }
+  .btn-next:hover { background: var(--gold-light); }
+
+  .btn-start {
+    background: transparent;
+    color: var(--gold);
+    border: 1px solid var(--gold);
+    padding: 10px;
+    border-radius: 6px;
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .btn-start:hover { background: var(--gold); color: #0d1117; }
+
+  /* Leaflet overrides */
+  .leaflet-container { background: #1a2535; }
+  .leaflet-popup-content-wrapper {
+    background: var(--surface);
+    border: 1px solid var(--gold);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: 'Crimson Pro', serif;
+  }
+  .leaflet-popup-tip { background: var(--gold); }
+  .leaflet-popup-content { font-size: 15px; }
+  .leaflet-popup-content b { color: var(--gold); font-family: 'Playfair Display', serif; }
+  .leaflet-popup-content small { color: var(--text-dim); font-size: 12px; }
+
+  .guess-marker-pulse {
+    width: 20px; height: 20px;
+    background: rgba(91,143,204,0.8);
+    border-radius: 50%;
+    border: 2px solid #fff;
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(91,143,204,0.5); }
+    50% { box-shadow: 0 0 0 10px rgba(91,143,204,0); }
+  }
+  .correct-marker { background: var(--correct); border: 2px solid #fff; width: 18px; height: 18px; border-radius: 50%; }
+
+  .score-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .score-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-light)); transition: width 0.5s; border-radius: 2px; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🗺 Северная Америка — Номенклатура</h1>
+  <div class="mode-tabs">
+    <button class="mode-tab active" onclick="setMode('study')">📚 Изучение</button>
+    <button class="mode-tab" onclick="setMode('quiz')">🎯 GeoGuessr</button>
+  </div>
+</header>
+
+<div class="category-bar" id="catBar">
+</div>
+
+<div class="main">
+  <div id="map"></div>
+  <div class="sidebar" id="sidebar">
+    <!-- filled by JS -->
+  </div>
+</div>
+
+<script>
+// ============== DATA ==============
+const CATEGORIES = {
+  ocean:    { label: 'Океаны',       color: '#3a7cbf', icon: '🌊' },
+  sea:      { label: 'Моря',         color: '#2e8faf', icon: '🌊' },
+  gulf:     { label: 'Заливы',       color: '#2a9d8f', icon: '🌊' },
+  strait:   { label: 'Проливы',      color: '#1a7a8a', icon: '〰' },
+  canal:    { label: 'Каналы',       color: '#e76f51', icon: '🚢' },
+  island:   { label: 'Острова',      color: '#8f5c2a', icon: '🏝' },
+  peninsula:{ label: 'Полуострова',  color: '#a07040', icon: '🏔' },
+  cape:     { label: 'Крайние точки',color: '#c94c4c', icon: '📍' },
+  plain:    { label: 'Равнины',      color: '#6aaa5c', icon: '🌾' },
+  mountain: { label: 'Горы',         color: '#7a6a5a', icon: '⛰' },
+  peak:     { label: 'Вершины',      color: '#b06060', icon: '🏔' },
+  river:    { label: 'Реки',         color: '#4a8fb0', icon: '💧' },
+  lake:     { label: 'Озёра',        color: '#3a75a0', icon: '💧' },
+  city:     { label: 'Города',       color: '#d4a843', icon: '🏙' },
+};
+
+const OBJECTS = [
+  // Oceans
+  { id:'atl',  name:'Атлантический океан',        cat:'ocean',     lat:35,    lon:-40  },
+  { id:'pac',  name:'Тихий океан',                cat:'ocean',     lat:30,    lon:-150 },
+  { id:'arc',  name:'Северный Ледовитый океан',   cat:'ocean',     lat:82,    lon:-100 },
+  // Seas
+  { id:'baf',  name:'Море Баффина',               cat:'sea',       lat:72,    lon:-68  },
+  { id:'ber',  name:'Берингово море',             cat:'sea',       lat:58,    lon:-175 },
+  { id:'bft',  name:'Море Бофорта',               cat:'sea',       lat:73,    lon:-140 },
+  { id:'car',  name:'Карибское море',             cat:'sea',       lat:15,    lon:-75  },
+  { id:'chu',  name:'Чукотское море',             cat:'sea',       lat:68,    lon:-168 },
+  // Gulfs
+  { id:'gak',  name:'Залив Аляска',               cat:'gulf',      lat:58,    lon:-148 },
+  { id:'hud',  name:'Гудзонов залив',             cat:'gulf',      lat:60,    lon:-85  },
+  { id:'cal',  name:'Калифорнийский залив',       cat:'gulf',      lat:27,    lon:-110 },
+  { id:'mex',  name:'Мексиканский залив',         cat:'gulf',      lat:25,    lon:-90  },
+  // Straits
+  { id:'bst',  name:'Берингов пролив',            cat:'strait',    lat:66,    lon:-169 },
+  { id:'hst',  name:'Гудзонов пролив',            cat:'strait',    lat:63,    lon:-71  },
+  { id:'dav',  name:'Девисов пролив',             cat:'strait',    lat:67,    lon:-57  },
+  // Canal
+  { id:'pan',  name:'Панамский канал',            cat:'canal',     lat:9.1,   lon:-79.9},
+  // Islands
+  { id:'ale',  name:'Алеутские острова',          cat:'island',    lat:52,    lon:-174 },
+  { id:'bfl',  name:'Остров Баффинова Земля',     cat:'island',    lat:67,    lon:-72  },
+  { id:'grl',  name:'Гренландия',                 cat:'island',    lat:72,    lon:-42  },
+  { id:'caa',  name:'Канадский Арктический архипелаг', cat:'island',lat:76,   lon:-95  },
+  { id:'gra',  name:'Большие Антильские острова', cat:'island',    lat:20,    lon:-74  },
+  // Peninsulas
+  { id:'pal',  name:'Полуостров Аляска',          cat:'peninsula', lat:58,    lon:-157 },
+  { id:'pca',  name:'Полуостров Калифорния',      cat:'peninsula', lat:26,    lon:-113 },
+  { id:'pla',  name:'Полуостров Лабрадор',        cat:'peninsula', lat:55,    lon:-63  },
+  { id:'pfl',  name:'Полуостров Флорида',         cat:'peninsula', lat:27,    lon:-81  },
+  { id:'pyu',  name:'Полуостров Юкатан',          cat:'peninsula', lat:19,    lon:-89  },
+  // Capes
+  { id:'mur',  name:'Мыс Мёрчисон (С)',          cat:'cape',      lat:71.8,  lon:-94.2},
+  { id:'mar',  name:'Мыс Марьято (Ю)',            cat:'cape',      lat:7.2,   lon:-80.9},
+  { id:'prw',  name:'Мыс Принца Уэльского (З)',   cat:'cape',      lat:65.6,  lon:-168.1},
+  { id:'stc',  name:'Мыс Сент-Чарльз (В)',        cat:'cape',      lat:52.4,  lon:-55.7},
+  // Plains
+  { id:'gbs',  name:'Большой Бассейн',            cat:'plain',     lat:40,    lon:-117 },
+  { id:'acp',  name:'Приатлантическая и Примексиканская низменности', cat:'plain', lat:32, lon:-83 },
+  { id:'gpl',  name:'Великие равнины',            cat:'plain',     lat:42,    lon:-102 },
+  { id:'cpl',  name:'Центральные равнины',        cat:'plain',     lat:43,    lon:-90  },
+  // Mountains
+  { id:'app',  name:'Аппалачи',                   cat:'mountain',  lat:37,    lon:-81  },
+  { id:'cst',  name:'Береговой хребет',           cat:'mountain',  lat:46,    lon:-124 },
+  { id:'krd',  name:'Кордильеры',                 cat:'mountain',  lat:53,    lon:-122 },
+  { id:'wsm',  name:'Западная Сьерра-Мадре',      cat:'mountain',  lat:25,    lon:-107 },
+  { id:'esm',  name:'Восточная Сьерра-Мадре',     cat:'mountain',  lat:24,    lon:-100 },
+  { id:'rky',  name:'Скалистые горы',             cat:'mountain',  lat:46,    lon:-112 },
+  // Peak
+  { id:'den',  name:'Гора Денали (Мак-Кинли)',    cat:'peak',      lat:63.07, lon:-151.0},
+  // Rivers
+  { id:'col',  name:'Река Колорадо',              cat:'river',     lat:36,    lon:-112 },
+  { id:'mac',  name:'Река Маккензи',              cat:'river',     lat:65,    lon:-127 },
+  { id:'mis',  name:'Река Миссисипи',             cat:'river',     lat:34,    lon:-91  },
+  { id:'rio',  name:'Река Рио-Гранде',            cat:'river',     lat:30,    lon:-104 },
+  { id:'yuk',  name:'Река Юкон',                  cat:'river',     lat:64,    lon:-140 },
+  // Lakes
+  { id:'lsu',  name:'Озеро Верхнее',             cat:'lake',      lat:47.5,  lon:-87.5},
+  { id:'lwin', name:'Озеро Виннипег',             cat:'lake',      lat:52,    lon:-97  },
+  { id:'lmi',  name:'Озеро Мичиган',              cat:'lake',      lat:44,    lon:-87  },
+  { id:'ler',  name:'Озеро Эри',                  cat:'lake',      lat:42,    lon:-81.3},
+  { id:'lbr',  name:'Большое Медвежье озеро',     cat:'lake',      lat:66,    lon:-122 },
+  // Cities
+  { id:'cdm',  name:'Мехико',                     cat:'city',      lat:19.43, lon:-99.13},
+  { id:'cny',  name:'Нью-Йорк',                   cat:'city',      lat:40.71, lon:-74.0 },
+  { id:'cla',  name:'Лос-Анджелес',               cat:'city',      lat:34.05, lon:-118.24},
+  { id:'cch',  name:'Чикаго',                     cat:'city',      lat:41.85, lon:-87.65},
+  { id:'cto',  name:'Торонто',                    cat:'city',      lat:43.7,  lon:-79.4 },
+  { id:'cmo',  name:'Монреаль',                   cat:'city',      lat:45.5,  lon:-73.6 },
+  { id:'cwa',  name:'Вашингтон',                  cat:'city',      lat:38.9,  lon:-77.04},
+  { id:'cot',  name:'Оттава',                     cat:'city',      lat:45.42, lon:-75.7 },
+];
+
+// ============== STATE ==============
+let currentMode = 'study';
+let activeCategories = new Set(Object.keys(CATEGORIES));
+let markers = {};
+let quizState = { active: false, current: null, score: 0, total: 0, answered: false, guessMarker: null, correctMarker: null, line: null };
+
+// ============== MAP ==============
+const map = L.map('map', { center: [50, -95], zoom: 3, zoomControl: true });
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© CartoDB',
+  maxZoom: 18
+}).addTo(map);
+
+function makeIcon(cat) {
+  const c = CATEGORIES[cat];
+  return L.divIcon({
+    className: '',
+    html: `<div style="background:${c.color};width:10px;height:10px;border-radius:50%;border:2px solid rgba(255,255,255,0.6);box-shadow:0 0 6px ${c.color}88"></div>`,
+    iconSize: [10, 10],
+    iconAnchor: [5, 5],
+  });
+}
+
+function renderMarkers() {
+  OBJECTS.forEach(obj => {
+    if (markers[obj.id]) { markers[obj.id].remove(); delete markers[obj.id]; }
+    if (currentMode === 'study' && activeCategories.has(obj.cat)) {
+      const m = L.marker([obj.lat, obj.lon], { icon: makeIcon(obj.cat) })
+        .addTo(map)
+        .bindPopup(`<b>${obj.name}</b><br><small>${CATEGORIES[obj.cat].icon} ${CATEGORIES[obj.cat].label}</small>`);
+      markers[obj.id] = m;
+    }
+  });
+}
+
+// ============== CATEGORY BAR ==============
+function buildCatBar() {
+  const bar = document.getElementById('catBar');
+  bar.innerHTML = '';
+  Object.entries(CATEGORIES).forEach(([key, cat]) => {
+    const btn = document.createElement('button');
+    btn.className = 'cat-btn on';
+    btn.style.borderColor = cat.color;
+    btn.style.color = cat.color;
+    btn.style.background = `${cat.color}18`;
+    btn.textContent = `${cat.icon} ${cat.label}`;
+    btn.dataset.cat = key;
+    btn.onclick = () => {
+      if (activeCategories.has(key)) { activeCategories.delete(key); btn.classList.remove('on'); }
+      else { activeCategories.add(key); btn.classList.add('on'); }
+      if (currentMode === 'study') renderMarkers();
+      if (currentMode === 'study') renderStudySidebar();
+    };
+    bar.appendChild(btn);
+  });
+}
+
+// ============== STUDY SIDEBAR ==============
+function renderStudySidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const grouped = {};
+  OBJECTS.filter(o => activeCategories.has(o.cat)).forEach(o => {
+    if (!grouped[o.cat]) grouped[o.cat] = [];
+    grouped[o.cat].push(o);
+  });
+  let html = '<div class="sidebar-inner">';
+  html += '<h2>Объекты номенклатуры</h2>';
+  Object.entries(CATEGORIES).forEach(([key, cat]) => {
+    if (!grouped[key]) return;
+    html += `<div class="nom-group"><div class="nom-group-title" style="color:${cat.color}">${cat.icon} ${cat.label}</div>`;
+    grouped[key].forEach(o => {
+      html += `<div class="nom-item" onclick="flyTo('${o.id}')">${o.name}</div>`;
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+  sidebar.innerHTML = html;
+}
+
+function flyTo(id) {
+  const obj = OBJECTS.find(o => o.id === id);
+  if (!obj) return;
+  map.flyTo([obj.lat, obj.lon], 5, { duration: 1 });
+  if (markers[obj.id]) setTimeout(() => markers[obj.id].openPopup(), 1000);
+}
+
+// ============== QUIZ MODE ==============
+let quizPool = [];
+
+function startQuiz() {
+  quizPool = [...OBJECTS].filter(o => activeCategories.has(o.cat));
+  quizPool = shuffle(quizPool);
+  quizState = { active: true, score: 0, total: 0, answered: false, guessMarker: null, correctMarker: null, line: null, poolIndex: 0 };
+  nextQuestion();
+}
+
+function nextQuestion() {
+  clearQuizOverlay();
+  if (quizState.poolIndex >= quizPool.length) {
+    quizPool = shuffle([...OBJECTS].filter(o => activeCategories.has(o.cat)));
+    quizState.poolIndex = 0;
+  }
+  quizState.current = quizPool[quizState.poolIndex++];
+  quizState.answered = false;
+  renderQuizSidebar();
+  map.flyTo([50, -95], 3, { duration: 0.5 });
+}
+
+function renderQuizSidebar() {
+  const obj = quizState.current;
+  const cat = CATEGORIES[obj.cat];
+  const sidebar = document.getElementById('sidebar');
+  const progress = quizState.total > 0 ? Math.round(quizState.score / quizState.total * 100) : 0;
+  sidebar.innerHTML = `
+    <div class="quiz-panel">
+      <div class="quiz-stats">
+        <div class="stat-box"><div class="stat-val">${quizState.score}</div><div class="stat-lbl">Верно</div></div>
+        <div class="stat-box"><div class="stat-val">${quizState.total}</div><div class="stat-lbl">Всего</div></div>
+        <div class="stat-box"><div class="stat-val">${progress}%</div><div class="stat-lbl">Точность</div></div>
+      </div>
+      <div class="score-bar"><div class="score-fill" style="width:${progress}%"></div></div>
+      <div class="quiz-question">
+        <div class="label">Найдите на карте</div>
+        <div class="obj-name">${obj.name}</div>
+        <div class="obj-cat">${cat.icon} ${cat.label}</div>
+      </div>
+      <div class="quiz-instruction">Кликните на карту, где, по-вашему, находится этот объект</div>
+      <div class="quiz-result" id="quizResult"></div>
+      <button class="btn-next" id="btnNext" onclick="nextQuestion()">Следующий →</button>
+      <button class="btn-start" onclick="startQuiz()">🔀 Начать заново</button>
+    </div>
+  `;
+}
+
+function clearQuizOverlay() {
+  if (quizState.guessMarker) { quizState.guessMarker.remove(); quizState.guessMarker = null; }
+  if (quizState.correctMarker) { quizState.correctMarker.remove(); quizState.correctMarker = null; }
+  if (quizState.line) { quizState.line.remove(); quizState.line = null; }
+}
+
+function handleQuizClick(e) {
+  if (!quizState.active || quizState.answered) return;
+  quizState.answered = true;
+  quizState.total++;
+
+  const obj = quizState.current;
+  const dist = map.distance([obj.lat, obj.lon], [e.latlng.lat, e.latlng.lng]) / 1000;
+  const correct = dist < 500;
+  if (correct) quizState.score++;
+
+  // Guess marker
+  quizState.guessMarker = L.marker(e.latlng, {
+    icon: L.divIcon({ className: '', html: '<div class="guess-marker-pulse"></div>', iconSize: [20,20], iconAnchor: [10,10] })
+  }).addTo(map).bindPopup(`<b>Ваш ответ</b><br><small>Расстояние: ${Math.round(dist)} км</small>`).openPopup();
+
+  // Correct marker
+  quizState.correctMarker = L.marker([obj.lat, obj.lon], {
+    icon: L.divIcon({ className: '', html: '<div class="correct-marker"></div>', iconSize: [18,18], iconAnchor: [9,9] })
+  }).addTo(map).bindPopup(`<b>${obj.name}</b><br><small>Правильное место</small>`);
+
+  // Line
+  quizState.line = L.polyline([[obj.lat, obj.lon], [e.latlng.lat, e.latlng.lng]], {
+    color: correct ? '#4caf8a' : '#e05c5c', weight: 2, dashArray: '6,4', opacity: 0.7
+  }).addTo(map);
+
+  // Fit bounds
+  map.fitBounds([[obj.lat, obj.lon], [e.latlng.lat, e.latlng.lng]], { padding: [60,60], maxZoom: 6 });
+
+  // Update sidebar result
+  const res = document.getElementById('quizResult');
+  if (res) {
+    res.className = `quiz-result ${correct ? 'correct' : 'wrong'}`;
+    res.style.display = 'block';
+    res.innerHTML = `
+      <div class="res-icon">${correct ? '✅' : '❌'}</div>
+      <div class="res-text">${correct ? 'Верно!' : 'Не совсем...'}</div>
+      <div class="res-dist">Расстояние: <b>${Math.round(dist)} км</b></div>
+    `;
+  }
+  const btn = document.getElementById('btnNext');
+  if (btn) btn.style.display = 'block';
+}
+
+map.on('click', handleQuizClick);
+
+// ============== MODE SWITCH ==============
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.mode-tab').forEach(t => { if (t.textContent.includes(mode === 'study' ? 'Изучение' : 'GeoGuessr')) t.classList.add('active'); });
+  document.getElementById('catBar').style.display = mode === 'study' ? '' : 'none';
+
+  clearQuizOverlay();
+  Object.values(markers).forEach(m => m.remove());
+  markers = {};
+
+  if (mode === 'study') {
+    quizState.active = false;
+    renderMarkers();
+    renderStudySidebar();
+  } else {
+    // quiz mode
+    const sidebar = document.getElementById('sidebar');
+    sidebar.innerHTML = `
+      <div class="quiz-panel">
+        <div class="quiz-question">
+          <div class="label">Режим GeoGuessr</div>
+          <div class="obj-name" style="font-size:16px">Найди объект на карте!</div>
+          <div class="obj-cat">Кликай — угадывай — учись</div>
+        </div>
+        <div class="quiz-instruction">Нажмите кнопку ниже, чтобы начать викторину. Вам будут показаны названия объектов — кликайте на карту, где они находятся.</div>
+        <button class="btn-start" onclick="startQuiz()">🎯 Начать викторину</button>
+      </div>
+    `;
+  }
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ============== INIT ==============
+buildCatBar();
+renderMarkers();
+renderStudySidebar();
+</script>
+</body>
+</html>
